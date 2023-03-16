@@ -64,33 +64,35 @@
             <DatePicker Grid.Row="5" Margin="2,2,2,2" Grid.Column="1" Grid.ColumnSpan="2" SelectedDate="{Binding EndDate}" Grid.RowSpan="2" />
 
         </Grid>
-        <Grid Grid.Row="1" Margin="10">
-            <DataGrid CanUserAddRows="False" AutoGenerateColumns="False" ItemsSource="{Binding ObserHistoricRate}">
-                <DataGrid.Columns>
-                    <DataGridTextColumn Width="140" Header="Latest Conversion Rate" Binding="{Binding LatestConversionRate}">
-                        <DataGridTextColumn.HeaderStyle>
-                            <Style TargetType="DataGridColumnHeader">
-                                <Setter Property="Background" Value="LightGreen"/>
-                                <Setter Property="Foreground" Value="Black"/>
-                            </Style>
-                        </DataGridTextColumn.HeaderStyle>
-                    </DataGridTextColumn>
-                    <DataGridTextColumn Width="140" Header="Latest Convertion Date" Binding="{Binding LatestConversionDate}"/>
-                    <DataGridTemplateColumn Width="400"  Header="Converstion History">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <DataGrid CanUserAddRows="False" ItemsSource="{Binding ConverstionHistory}" Width="400" AutoGenerateColumns="False">
-                                    <DataGrid.Columns>
-                                        <DataGridTextColumn Width="127" Header="Date" Binding="{Binding Date}"></DataGridTextColumn>
-                                        <DataGridTextColumn Width="120" Header="CurrencyType" Binding="{Binding CurrencyType}"></DataGridTextColumn>
-                                        <DataGridTextColumn Width="120" Header="Ratefrom" Binding="{Binding  Ratefrom}"></DataGridTextColumn>
-                                    </DataGrid.Columns>
-                                </DataGrid>
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-                </DataGrid.Columns>
-            </DataGrid>
-        </Grid>
+        <ScrollViewer Grid.Row="1">
+            <Grid  Margin="10">
+                <DataGrid CanUserAddRows="False" AutoGenerateColumns="False" ItemsSource="{Binding ObserHistoricRate}">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Width="140" Header="Latest Conversion Rate" Binding="{Binding LatestConversionRate}">
+                            <DataGridTextColumn.HeaderStyle>
+                                <Style TargetType="DataGridColumnHeader">
+                                    <Setter Property="Background" Value="LightGreen"/>
+                                    <Setter Property="Foreground" Value="Black"/>
+                                </Style>
+                            </DataGridTextColumn.HeaderStyle>
+                        </DataGridTextColumn>
+                        <DataGridTextColumn Width="140" Header="Latest Convertion Date" Binding="{Binding LatestConversionDate}"/>
+                        <DataGridTemplateColumn Width="400"  Header="Converstion History">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <DataGrid CanUserAddRows="False" ItemsSource="{Binding ConverstionHistory}" Width="400" AutoGenerateColumns="False">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Width="127" Header="Date" Binding="{Binding Date}"></DataGridTextColumn>
+                                            <DataGridTextColumn Width="120" Header="CurrencyType" Binding="{Binding CurrencyType}"></DataGridTextColumn>
+                                            <DataGridTextColumn Width="120" Header="Ratefrom" Binding="{Binding  Ratefrom}"></DataGridTextColumn>
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Grid>
+        </ScrollViewer>
     </Grid>
 </Window>

@@ -20,48 +20,38 @@ using System.Collections.Concurrent;
 using System.Collections.Specialized;
 using System.Windows.Controls;
 using System.Timers;
+using System.Windows.Threading;
+using System.Windows.Data;
 
 namespace CurrencyConverter
 {
     internal class MainViewModel : INotifyPropertyChanged
     {
 
-        private readonly Queue<KeyValuePair<string, HistoricConversionRate>> requestQueue = new Queue<KeyValuePair<string, HistoricConversionRate>>();
-
+        private readonly ConcurrentQueue<KeyValuePair<string, HistoricConversionRate>> requestQueue = new ConcurrentQueue<KeyValuePair<string, HistoricConversionRate>>();
+        private static readonly HttpClient client = new HttpClient();
         public List<ConverstionHistory> HistoryData { get; set; }
+        private object _lock = new object();
 
         public MainViewModel()
         {
+            client.BaseAddress = new Uri("https://api.frankfurter.app/");
+
             FromCurrency = Currency.EUR;
             ToCurrency = Currency.USD;
             Amount = 1;
-            StartDate = new DateTime(2000, 01, 01);
+            StartDate = new DateTime(2000, 01, 01); //Assign default dates 
             EndDate = new DateTime(2000, 01, 10);
 
             System.Timers.Timer newTimer = new System.Timers.Timer();
-            newTimer.Elapsed += new ElapsedEventHandler(RemoveOldCachedata);
-            newTimer.Interval = 900000;  //every 15 min remove old cache data 
+            newTimer.Elapsed += new ElapsedEventHandler(RemoveOldCacheData);
+            newTimer.Interval = 300000;  //every 5 min remove old cache data 
             newTimer.Start();
         }
 
-        private void RemoveOldCachedata(object sender, ElapsedEventArgs e)
-        {
-            try
-            {
-                requestQueue.Dequeue();
-                //item remove
-            }
-            catch (Exception ex)
-            {
 
-                MessageBox.Show($"Exception" + ex.Message);
-            }
-        }
 
         public event PropertyChangedEventHandler PropertyChanged;
-
-
-        //IConvertible converter = null;
 
         private Currency fromCurrency;
         private Currency toCurrency;
@@ -75,79 +65,69 @@ namespace CurrencyConverter
 
 
         private ObservableCollection<HistoricConversionRate> obserHistoricRate = new ObservableCollection<HistoricConversionRate>();
-
         public ObservableCollection<HistoricConversionRate> ObserHistoricRate
         {
-            get => obserHistoricRate;
-            set => obserHistoricRate = value;
+            get => obserHistoricRate; set => obserHistoricRate = value;
         }
 
         public HistoricConversionRate HistoricConversionRate
         {
-            get => historicConversionRate;
-            set
-            {
-                historicConversionRate = value;
-                OnPropertyChanged();
-            }
+            get => historicConversionRate; set { historicConversionRate = value; OnPropertyChanged(); }
         }
 
         public DateTime StartDate
         {
-            get => startDate;
-            set
-            {
-                startDate = value;
-                OnPropertyChanged();
-            }
+            get => startDate; set { startDate = value; OnPropertyChanged(); }
         }
 
         public DateTime EndDate
         {
-            get => endDate;
-            set
-            {
-                endDate = value;
-                OnPropertyChanged();
-            }
+            get => endDate; set { endDate = value; OnPropertyChanged(); }
         }
 
         public Currency FromCurrency
         {
-            get => fromCurrency;
-            set
-            {
-                fromCurrency = value;
-                OnPropertyChanged();
-            }
+            get => fromCurrency; set { fromCurrency = value; OnPropertyChanged(); }
         }
 
         public Currency ToCurrency
         {
-            get => toCurrency;
-            set
-            {
-                toCurrency = value;
-                OnPropertyChanged();
-            }
+            get => toCurrency; set { toCurrency = value; OnPropertyChanged(); }
         }
+
         public double Amount
         {
-            get => amount;
-            set
-            {
-                amount = value;
-                OnPropertyChanged();
-            }
+            get => amount; set { amount = value; OnPropertyChanged(); }
         }
 
         public double ExchangedAmount
         {
-            get => exchangedAmount;
-            private set
+            get => exchangedAmount; private set { exchangedAmount = value; OnPropertyChanged(); }
+        }
+
+        /// <summary>
+        /// Perodically remove old data from cache.
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void RemoveOldCacheData(object sender, ElapsedEventArgs e)
+        {
+            try
             {
-                exchangedAmount = value;
-                OnPropertyChanged();
+                App.Current.Dispatcher.Invoke((Action)delegate // <--- HERE
+                {
+                    if (requestQueue.Count > 0)
+                    {
+                        if (requestQueue.TryDequeue(out KeyValuePair<string, HistoricConversionRate> history))
+                        {
+                            ObserHistoricRate.Remove(history.Value);
+                        }
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Exception" + ex.Message);
             }
         }
 
@@ -159,46 +139,46 @@ namespace CurrencyConverter
         {
             try
             {
-                using (HttpClient client = new HttpClient())
+                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+                string url = $"{client.BaseAddress}latest?amount={Amount}&from={FromCurrency}&to={ToCurrency}";
+                HttpResponseMessage response = await client.GetAsync(url);
+                if (response.IsSuccessStatusCode)
                 {
-                    client.BaseAddress = new Uri("https://api.frankfurter.app/");
-                    client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-
-                    string url = $"{client.BaseAddress}latest?amount={Amount}&from={FromCurrency}&to={ToCurrency}";
-                    HttpResponseMessage response = await client.GetAsync(url);
-                    if (response.IsSuccessStatusCode)
-                    {
-                        var currencyData = JsonConvert.DeserializeObject<CurrencyConvertionDetails>(await response.Content.ReadAsStringAsync());
-
-                        ExchangedAmount = getCurrencyValue(currencyData.rates);
-
-                    }
-                    else
-                    {
-                        MessageBox.Show("Error Code" + response.StatusCode + " : Message - " + response.ReasonPhrase);
-                    }
+                    var currencyData = JsonConvert.DeserializeObject<CurrencyConvertionDetails>(await response.Content.ReadAsStringAsync());
+                    ExchangedAmount = getCurrencyValue(currencyData.rates);
+                }
+                else
+                {
+                    MessageBox.Show("Error Code" + response.StatusCode + " : Message - Server is not responding");
                 }
             }
             catch (Exception ex)
             {
-
                 MessageBox.Show("Exception :" + ex.Message);
             }
         }
 
-
-        double getCurrencyValue(object myObject)
+        private double getCurrencyValue(object myObject)
         {
-            foreach (PropertyInfo pi in myObject.GetType().GetProperties())
+            try
             {
-                if (pi.PropertyType == typeof(double))
+                foreach (PropertyInfo pi in myObject.GetType().GetProperties())
                 {
-                    double value = (double)pi.GetValue(myObject);
-                    if (value > 0)
+                    if (pi.PropertyType == typeof(double))
                     {
-                        return value;
+                        double value = (double)pi.GetValue(myObject);
+                        if (value > 0)
+                        {
+                            return value;
+                        }
                     }
                 }
+            }
+            catch (Exception)
+            {
+
+
             }
             return 0;
         }
@@ -226,60 +206,60 @@ namespace CurrencyConverter
 
                 if (!IsExist)
                 {
-                    using (HttpClient client = new HttpClient())
+                    client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+                    string uri = historicApiURI;//$"{client.BaseAddress}{dateRange}";
+                    var response = await client.GetAsync(uri);
+                    if (response.IsSuccessStatusCode)
                     {
-                        client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+                        var currencyHistoryData = JsonConvert.DeserializeObject<CurrencyDetails>(await response.Content.ReadAsStringAsync());
 
-                        string uri = historicApiURI;//$"{client.BaseAddress}{dateRange}";
-                        var response = await client.GetAsync(uri);
-                        if (response.IsSuccessStatusCode)
+                        dynamic ratesData = ((IEnumerable)currencyHistoryData.rates).Cast<object>().ToList();
+                        HistoryData = new List<ConverstionHistory>();
+
+                        foreach (var item in ratesData)
                         {
-                            var currencyHistoryData = JsonConvert.DeserializeObject<CurrencyDetails>(await response.Content.ReadAsStringAsync());
-
-                            dynamic ratesData = ((IEnumerable)currencyHistoryData.rates).Cast<object>().ToList();
-                            HistoryData = new List<ConverstionHistory>();
-
-                            foreach (var item in ratesData)
+                            foreach (var item1 in item.Value)
                             {
-                                foreach (var item1 in item.Value)
-                                {
-                                    var chistory = new ConverstionHistory();
-                                    chistory.Date = item.Name;
-                                    chistory.CurrencyType = item1.Name;
-                                    chistory.Ratefrom = item1.Value.Value;
-                                    HistoryData.Add(chistory);
-                                }
+                                var chistory = new ConverstionHistory();
+                                chistory.Date = item.Name;
+                                chistory.CurrencyType = item1.Name;
+                                chistory.Ratefrom = item1.Value.Value;
+                                HistoryData.Add(chistory);
                             }
+                        }
 
-                            //Call API to get latest currency details
-                            string latestAvailableConversionDate = string.Empty;
-                            string LatestCurrencyValue = $"{baseAddress}latest?from={fromCurrency.ToString()}";
-                            var latestCurrencyResponse = await client.GetAsync(LatestCurrencyValue);
-                            if (latestCurrencyResponse.IsSuccessStatusCode)
-                                latestAvailableConversionDate = JsonConvert.DeserializeObject<LatestCurrency>(await latestCurrencyResponse.Content.ReadAsStringAsync()).date;
+                        //Call API to get latest currency details
+                        string latestAvailableConversionDate = string.Empty;
+                        string LatestCurrencyValue = $"{baseAddress}latest?from={fromCurrency.ToString()}";
+                        var latestCurrencyResponse = await client.GetAsync(LatestCurrencyValue);
+                        if (latestCurrencyResponse.IsSuccessStatusCode)
+                            latestAvailableConversionDate = JsonConvert.DeserializeObject<LatestCurrency>(await latestCurrencyResponse.Content.ReadAsStringAsync()).date;
 
-                            HistoricConversionRate = new HistoricConversionRate
-                            {
-                                ConverstionHistory = HistoryData,
-                                LatestConversionRate = ExchangedAmount.ToString(),
-                                LatestConversionDate = latestAvailableConversionDate,
-                            };
+                        HistoricConversionRate = new HistoricConversionRate
+                        {
+                            ConverstionHistory = HistoryData,
+                            LatestConversionRate = ExchangedAmount.ToString(),
+                            LatestConversionDate = latestAvailableConversionDate,
+                        };
 
-                            if (requestQueue.Count < 50) //need to add this value in configuration
-                            {
-                                requestQueue.Enqueue(new KeyValuePair<string, HistoricConversionRate>(historicApiURI, HistoricConversionRate));
-                                ObserHistoricRate.Add(HistoricConversionRate);
-                            }
-                            else
-                            {
-                                requestQueue.Dequeue();
-                                requestQueue.Enqueue(new KeyValuePair<string, HistoricConversionRate>(historicApiURI, HistoricConversionRate));
-                            }
+                        if (requestQueue.Count < 50) //need to add this value in configuration
+                        {
+                            requestQueue.Enqueue(new KeyValuePair<string, HistoricConversionRate>(historicApiURI, HistoricConversionRate));
+                            ObserHistoricRate.Add(HistoricConversionRate);
                         }
                         else
                         {
-                            MessageBox.Show($"Historic data is not avaiable for given start and end date. Please try to change the dates");
+                            if (requestQueue.Count > 0)
+                            {
+                                requestQueue.TryDequeue(out KeyValuePair<string, HistoricConversionRate> kvp);
+                                requestQueue.Enqueue(new KeyValuePair<string, HistoricConversionRate>(historicApiURI, HistoricConversionRate));
+                            }
                         }
+                    }
+                    else
+                    {
+                        MessageBox.Show($"Historic data is not avaiable for given start and end date. Please try to change the dates");
                     }
                 }
                 else
